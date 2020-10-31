@@ -85,6 +85,35 @@ static const vector<string> knownCommands = {
   "stop",
 };
 
+static const vector<int> blackHoleOpening =
+{
+  Location::getLoc(12, 4, 19),
+  Location::getLoc(14, 12, 19),
+  Location::getLoc(6, 14, 19),
+  Location::getLoc(4, 6, 19)
+};
+
+static const vector<int> whiteHoleOpening =
+{
+  Location::getLoc(9, 9, 19),
+  Location::getLoc(15, 8, 19),
+  Location::getLoc(3, 10, 19)
+};
+
+static const vector<vector<int>> blackNewOubeiStyleOpening =
+{
+  {
+    Location::getLoc(15, 3, 19),
+    Location::getLoc(15, 16, 19),
+    Location::getLoc(14, 13, 19)
+  },
+  {
+    Location::getLoc(15, 3, 19),
+    Location::getLoc(2, 3, 19),
+    Location::getLoc(5, 4, 19)
+  }
+};
+
 static bool tryParseLoc(const string& s, const Board& b, Loc& loc) {
   return Location::tryOfString(s,b,loc);
 }
@@ -751,7 +780,7 @@ struct GTPEngine {
     bool cleanupBeforePass, bool ogsChatToStderr,
     bool allowResignation, double resignThreshold, int resignConsecTurns, double resignMinScoreDifference,
     bool logSearchInfo, bool debug, bool playChosenMove,
-    string& response, bool& responseIsError, bool& maybeStartPondering,
+    string& response, bool& responseIsError, bool& maybeStartPondering,string openingName,
     AnalyzeArgs args
   ) {
     ClockTimer timer;
@@ -803,7 +832,7 @@ struct GTPEngine {
     double searchFactor = PlayUtils::getSearchFactor(searchFactorWhenWinningThreshold,searchFactorWhenWinning,params,recentWinLossValues,pla);
     lastSearchFactor = searchFactor;
 
-    Loc moveLoc;
+    Loc moveLocTemp;
     bot->setAvoidMoveUntilByLoc(args.avoidMoveUntilByLocBlack,args.avoidMoveUntilByLocWhite);
     if(args.analyzing) {
       std::function<void(const Search* search)> callback = getAnalyzeCallback(pla,args);
@@ -811,15 +840,98 @@ struct GTPEngine {
         bot->setAlwaysIncludeOwnerMap(true);
       else
         bot->setAlwaysIncludeOwnerMap(false);
-      moveLoc = bot->genMoveSynchronousAnalyze(pla, tc, searchFactor, args.secondsPerReport, callback);
+      moveLocTemp = bot->genMoveSynchronousAnalyze(pla, tc, searchFactor, args.secondsPerReport, callback);
       //Make sure callback happens at least once
       callback(bot->getSearch());
     }
     else {
-      moveLoc = bot->genMoveSynchronous(pla,tc,searchFactor);
+      moveLocTemp = bot->genMoveSynchronous(pla,tc,searchFactor);
     }
 
-    bool isLegal = bot->isLegalStrict(moveLoc,pla);
+    Loc moveLoc;
+    bool isLegal = false;
+    Board boardTemp = bot->getRootBoard();
+    if(!openingName.empty() && BoardHistory::numHandicapStonesOnBoard(boardTemp) < 2) {
+      if(openingName == "hole") {
+        if(pla == P_BLACK) {
+          if(bot->getRootHist().moveHistory.size() / 2 < blackHoleOpening.size()) {
+            for(int i = 0; i < blackHoleOpening.size(); i++)
+            {
+              moveLoc = blackHoleOpening[i];
+              isLegal = bot->isLegalStrict(moveLoc,pla);
+              if(isLegal) break;
+            }
+          }
+        }
+        else {
+          if(bot->getRootHist().moveHistory.size() / 2 < whiteHoleOpening.size()) {
+            for(int j = 0; j < whiteHoleOpening.size(); j++)
+            {
+              moveLoc = whiteHoleOpening[j];
+              isLegal = bot->isLegalStrict(moveLoc,pla);
+              if(isLegal) break;
+            }
+          }
+        }
+      }
+      else if(openingName == "tengen") {
+        if(bot->getRootHist().moveHistory.size() < 2) {
+          moveLoc = Location::getCenterLoc(boardTemp.x_size,boardTemp.y_size);
+          isLegal = bot->isLegalStrict(moveLoc,pla);
+        }
+      }
+      else if (openingName == "newoubei") {
+        if(pla == P_BLACK) {
+          vector<Move> moveHistoryTemp = bot->getRootHist().moveHistory;
+          if(moveHistoryTemp.size() / 2 < blackNewOubeiStyleOpening[0].size()) {
+            Loc lastMoveLoc;
+            if(moveHistoryTemp.size() > 0) {
+              lastMoveLoc = moveHistoryTemp[moveHistoryTemp.size() - 1].loc;
+            }
+            for(int i = 0; i < blackNewOubeiStyleOpening.size(); i++)
+            {
+              for(int j = 0; j < blackNewOubeiStyleOpening[i].size(); j++) {
+                moveLoc = blackNewOubeiStyleOpening[i][j];
+                if(lastMoveLoc == NULL) {
+                  isLegal = bot->isLegalStrict(moveLoc,pla);
+                }
+                else if(Location::euclideanDistanceSquared(moveLoc, lastMoveLoc, boardTemp.x_size) > 5) {
+                  if(moveHistoryTemp.size() == 4) {
+                    if(j == 2) {
+                      isLegal = bot->isLegalStrict(moveLoc,pla);
+                    }
+                  }
+                  else {
+                    isLegal = bot->isLegalStrict(moveLoc,pla);
+                  }
+                }
+                else {
+                  break;
+                }
+                if(isLegal) break;
+              }
+              if(isLegal) break;
+            }
+          }
+        }
+        else {
+          if(bot->getRootHist().moveHistory.size() < 2) {
+            moveLoc = Location::getCenterLoc(boardTemp.x_size,boardTemp.y_size);
+            isLegal = bot->isLegalStrict(moveLoc,pla);
+          }
+        }
+      }
+
+      if(!isLegal) {
+        moveLoc = moveLocTemp;
+        isLegal = bot->isLegalStrict(moveLoc,pla);
+      }
+    }
+    else {
+      moveLoc = moveLocTemp;
+      isLegal = bot->isLegalStrict(moveLoc,pla);
+    }
+
     if(moveLoc == Board::NULL_LOC || !isLegal) {
       responseIsError = true;
       response = "genmove returned null location or illegal move";
@@ -1410,6 +1522,11 @@ int MainCmds::gtp(int argc, const char* const* argv) {
   if(cfg.contains("logToStderr") && cfg.getBool("logToStderr")) {
     loggingToStderr = true;
     logger.setLogToStderr(true);
+  }
+
+  string forcedOpeningName;
+  if(cfg.contains("forcedOpening")) {
+    forcedOpeningName = cfg.getString("forcedOpening");
   }
 
   logger.write("GTP Engine starting...");
@@ -2163,7 +2280,7 @@ int MainCmds::gtp(int argc, const char* const* argv) {
           cleanupBeforePass,ogsChatToStderr,
           allowResignation,resignThreshold,resignConsecTurns,resignMinScoreDifference,
           logSearchInfo,debug,playChosenMove,
-          response,responseIsError,maybeStartPondering,
+          response,responseIsError,maybeStartPondering,forcedOpeningName,
           GTPEngine::AnalyzeArgs()
         );
       }
@@ -2193,7 +2310,7 @@ int MainCmds::gtp(int argc, const char* const* argv) {
           cleanupBeforePass,ogsChatToStderr,
           allowResignation,resignThreshold,resignConsecTurns,resignMinScoreDifference,
           logSearchInfo,debug,playChosenMove,
-          response,responseIsError,maybeStartPondering,
+          response,responseIsError,maybeStartPondering,forcedOpeningName,
           args
         );
         //And manually handle the result as well. In case of error, don't report any play.
@@ -2334,7 +2451,7 @@ int MainCmds::gtp(int argc, const char* const* argv) {
 
     else if(command == "final_status_list") {
       int statusMode = 0;
-      if(pieces.size() != 1) {
+      if(pieces.size() != 1 && pieces.size() != 2) {
         responseIsError = true;
         response = "Expected one argument for final_status_list but got '" + Global::concat(pieces," ") + "'";
       }
@@ -2352,16 +2469,42 @@ int MainCmds::gtp(int argc, const char* const* argv) {
         }
 
         if(statusMode < 3) {
+          string color = "";
+          if (pieces.size() == 2) {
+            if (pieces[1] == "b" || pieces[1] == "B" ||
+                pieces[1] == "black" || pieces[1] == "Black") {
+              color = "B";
+            }
+            else if (pieces[1] == "w" || pieces[1] == "W" ||
+                pieces[1] == "white" || pieces[1] == "White") {
+              color = "W";
+            }
+          }
+
           vector<bool> isAlive = engine->computeAnticipatedStatusesWithOwnership(logger);
           Board board = engine->bot->getRootBoard();
           vector<Loc> locsToReport;
+          vector<Loc> locsToReportBlack;
+          vector<Loc> locsToReportWhite;
 
           if(statusMode == 0) {
             for(int y = 0; y<board.y_size; y++) {
               for(int x = 0; x<board.x_size; x++) {
                 Loc loc = Location::getLoc(x,y,board.x_size);
-                if(board.colors[loc] != C_EMPTY && isAlive[loc])
-                  locsToReport.push_back(loc);
+                if(pieces.size() == 2) {
+                  if(isAlive[loc]) {
+                    if(board.colors[loc] == C_BLACK) {
+                      locsToReportBlack.push_back(loc);
+                    }
+                    else if(board.colors[loc] == C_WHITE) {
+                      locsToReportWhite.push_back(loc);
+                    }
+                  }
+                }
+                else {
+                  if(board.colors[loc] != C_EMPTY && isAlive[loc])
+                    locsToReport.push_back(loc);
+                }
               }
             }
           }
@@ -2369,19 +2512,76 @@ int MainCmds::gtp(int argc, const char* const* argv) {
             for(int y = 0; y<board.y_size; y++) {
               for(int x = 0; x<board.x_size; x++) {
                 Loc loc = Location::getLoc(x,y,board.x_size);
-                if(board.colors[loc] != C_EMPTY && !isAlive[loc])
-                  locsToReport.push_back(loc);
+                if(pieces.size() == 2) {
+                  if(!isAlive[loc]) {
+                    if(board.colors[loc] == C_BLACK) {
+                      locsToReportBlack.push_back(loc);
+                    }
+                    else if(board.colors[loc] == C_WHITE) {
+                      locsToReportWhite.push_back(loc);
+                    }
+                  }
+                }
+                else {
+                  if(board.colors[loc] != C_EMPTY && !isAlive[loc])
+                    locsToReport.push_back(loc);
+                }
               }
             }
           }
 
           response = "";
-          for(int i = 0; i<locsToReport.size(); i++) {
-            Loc loc = locsToReport[i];
-            if(i > 0)
-              response += " ";
-            response += Location::toString(loc,board);
+          if(pieces.size() == 2) {
+            if(color == "B") {
+              for(int i = 0; i<locsToReportWhite.size(); i++) {
+                Loc loc = locsToReportWhite[i];
+                if(i > 0)
+                  response += " ";
+                response += Location::toString(loc,board);
+              }
+            }
+            else if(color == "W") {
+              for(int i = 0; i<locsToReportBlack.size(); i++) {
+                Loc loc = locsToReportBlack[i];
+                if(i > 0)
+                  response += " ";
+                response += Location::toString(loc,board);
+              }
+            }
           }
+          else {
+            for(int i = 0; i<locsToReport.size(); i++) {
+              Loc loc = locsToReport[i];
+              if(i > 0)
+                response += " ";
+              response += Location::toString(loc,board);
+            }
+          }
+        }
+      }
+    }
+
+    else if(command == "captures") {
+      if(pieces.size() != 1) {
+        responseIsError = true;
+        response = "Expected one or two arguments for loadsgf but got '" + Global::concat(pieces," ") + "'";
+      }
+      else {
+        string color = "";
+        if(pieces[0] == "b" || pieces[0] == "B" ||
+            pieces[0] == "black" || pieces[0] == "Black") {
+          color = "B";
+        }
+        else if(pieces[0] == "w" || pieces[0] == "W" ||
+                 pieces[0] == "white" || pieces[0] == "White") {
+          color = "W";
+        }
+        Board board = engine->bot->getRootBoard();
+        if(color == "B") {
+          response = Global::intToString(board.numWhiteCaptures);
+        }
+        else if(color == "W") {
+          response = Global::intToString(board.numBlackCaptures);
         }
       }
     }

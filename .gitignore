@@ -2,6 +2,7 @@
 *.exe
 *~
 __pycache__
+.vscode
 *.h5
 *.log
 *.cbp
@@ -33,6 +34,7 @@ cpp/program/gitinfo.h
 data/
 versions/
 cpp/build
+cpp/KataGoData
 
 export_model_cuda.sh
 mixmodels.sh
@@ -45,6 +47,20 @@ tmp.txt
 test.txt
 cpp/tmp
 out.txt
+
+*.bat
+*.dll
+filelist.txt
+model_list.txt
+rmdirlist.txt
+base*
+hint
+kifu
+human_sgf
+match_sgf
+sgf_test
+logs/
+temp/
 
 # For clion IDE
 .idea

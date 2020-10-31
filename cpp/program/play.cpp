@@ -209,7 +209,7 @@ void GameInitializer::initShared(ConfigParser& cfg, Logger& logger) {
   if(cfg.contains("komiMean") && (cfg.contains("komiAuto") && cfg.getBool("komiAuto")))
     throw IOError("Must specify only one of komiMean=<komi value> or komiAuto=True in config");
 
-  komiMean = cfg.contains("komiMean") ? cfg.getFloat("komiMean",Rules::MIN_USER_KOMI,Rules::MAX_USER_KOMI) : 7.5f;
+  komiMean = cfg.contains("komiMean") ? cfg.getFloat("komiMean",Rules::MIN_USER_KOMI,Rules::MAX_USER_KOMI) : -0.5f;
   komiStdev = cfg.contains("komiStdev") ? cfg.getFloat("komiStdev",0.0f,60.0f) : 0.0f;
   handicapProb = cfg.contains("handicapProb") ? cfg.getDouble("handicapProb",0.0,1.0) : 0.0;
   handicapCompensateKomiProb = cfg.contains("handicapCompensateKomiProb") ? cfg.getDouble("handicapCompensateKomiProb",0.0,1.0) : 0.0;
@@ -523,6 +523,7 @@ void GameInitializer::createGameSharedUnsynchronized(
 
     //No handicap when starting from a sampled position.
     double thisHandicapProb = 0.0;
+    komiMean = -0.5f;
     extraBlackAndKomi = chooseExtraBlackAndKomi(
       komiMean, komiStdev, komiAllowIntegerProb,
       thisHandicapProb, numExtraBlackFixed,
@@ -585,6 +586,10 @@ void GameInitializer::createGameSharedUnsynchronized(
     if(makeGameFairProb > 0.0)
       extraBlackAndKomi.makeGameFair = rand.nextBool(makeGameFairProb);
     extraBlackAndKomi.makeGameFairForEmptyBoard = false;
+    extraBlackAndKomi.komi = komiMean;
+    extraBlackAndKomi.komiBase = komiMean;
+    rules.komi = komiMean;
+    hist.rules.komi = komiMean;
   }
 }
 

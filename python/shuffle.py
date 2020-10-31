@@ -10,6 +10,7 @@ import zipfile
 import shutil
 import psutil
 import json
+import glob
 
 import multiprocessing
 
@@ -159,7 +160,7 @@ def merge_shards(filename, num_shards_to_merge, out_tmp_dir, batch_size, ensure_
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser(description='Shuffle data files')
-  parser.add_argument('dirs', metavar='DIR', nargs='+', help='Directories of training data files')
+  parser.add_argument('-dirs', required=True, help='Directories of training data files')
   parser.add_argument('-min-rows', type=int, required=False, help='Minimum training rows to use, default 250k')
   parser.add_argument('-max-rows', type=int, required=False, help='Maximum training rows to use, default unbounded')
   parser.add_argument('-keep-target-rows', type=int, required=False, help='Target number of rows to actually keep in the final data set, default 1.2M')
@@ -197,7 +198,7 @@ if __name__ == '__main__':
     keep_target_rows = 1200000
 
   all_files = []
-  for d in dirs:
+  for d in glob.glob(dirs):
     for (path,dirnames,filenames) in os.walk(d):
       filenames = [os.path.join(path,filename) for filename in filenames if filename.endswith('.npz')]
       filenames = [(filename,os.path.getmtime(filename)) for filename in filenames]

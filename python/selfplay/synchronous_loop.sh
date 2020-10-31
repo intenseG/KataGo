@@ -43,7 +43,7 @@ mkdir -p "$SCRATCHDIR"
 mkdir -p "$BASEDIR"/selfplay
 mkdir -p "$BASEDIR"/gatekeepersgf
 
-# NOTE: You probably want to edit settings in the cpp/configs/selfplay1.cfg - what board sizes and rules, you want to learn, number of visits to use, etc.
+# NOTE: You probably want to edit settings in the cpp/configs/training/selfplay1.cfg - what board sizes and rules, you want to learn, number of visits to use, etc.
 # NOTE: You may want to adjust these numbers.
 NUM_GAMES_PER_CYCLE=1000
 NUM_THREADS_FOR_SHUFFLING=8
@@ -56,7 +56,7 @@ set -x
 while true
 do
     echo "Selfplay"
-    time "$GITROOTDIR"/cpp/katago selfplay -max-games-total "$NUM_GAMES_PER_CYCLE" -output-dir "$BASEDIR"/selfplay -models-dir "$BASEDIR"/models -config "$GITROOTDIR"/cpp/configs/selfplay1.cfg | tee -a "$BASEDIR"/selfplay/stdout.txt
+    time "$GITROOTDIR"/cpp/katago selfplay -max-games-total "$NUM_GAMES_PER_CYCLE" -output-dir "$BASEDIR"/selfplay -models-dir "$BASEDIR"/models -config "$GITROOTDIR"/cpp/configs/training/selfplay1.cfg | tee -a "$BASEDIR"/selfplay/stdout.txt
 
     echo "Shuffle"
     (
@@ -74,7 +74,7 @@ do
     )
 
     echo "Gatekeeper"
-    time "$GITROOTDIR"/cpp/katago gatekeeper -rejected-models-dir "$BASEDIR"/rejectedmodels -accepted-models-dir "$BASEDIR"/models/ -sgf-output-dir "$BASEDIR"/gatekeepersgf/ -test-models-dir "$BASEDIR"/modelstobetested/ -config "$GITROOTDIR"/cpp/configs/gatekeeper1.cfg -quit-if-no-nets-to-test | tee -a "$BASEDIR"/gatekeepersgf/stdout.txt
+    time "$GITROOTDIR"/cpp/katago gatekeeper -rejected-models-dir "$BASEDIR"/rejectedmodels -accepted-models-dir "$BASEDIR"/models/ -sgf-output-dir "$BASEDIR"/gatekeepersgf/ -test-models-dir "$BASEDIR"/modelstobetested/ -config "$GITROOTDIR"/cpp/configs/training/gatekeeper1.cfg -quit-if-no-nets-to-test | tee -a "$BASEDIR"/gatekeepersgf/stdout.txt
 done
 
 exit 0
